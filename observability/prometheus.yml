@@ -1,0 +1,11 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  # DNS discovery finds every replica, so scaling api needs no config change.
+  # Add more jobs here (worker, ingest, …) as the project grows.
+  - job_name: api
+    dns_sd_configs:
+      - names: [api]
+        type: A
+        port: 8080

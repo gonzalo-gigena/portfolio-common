@@ -1,0 +1,19 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  fakes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Shell scripts parse
+        run: for f in scripts/*.sh; do sh -n "$f"; done
+      - name: Fakes end-to-end test
+        run: docker compose -f test/compose.yaml --profile fakes run --rm --build test
+      - name: Tear down
+        if: always()
+        run: docker compose -f test/compose.yaml --profile fakes down -v
