@@ -1,0 +1,11 @@
+# Prometheus that finds every replica of the project's `api` service by DNS.
+# docker compose --profile observability up -d  → http://localhost:9090
+services:
+  prometheus:
+    image: prom/prometheus:v3.16.0
+    profiles: [observability]
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    mem_limit: 256m

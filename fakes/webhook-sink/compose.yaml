@@ -1,0 +1,18 @@
+# Point alerts or outgoing webhooks at http://webhook-sink:8091/hooks/<name>.
+# See what arrived at http://localhost:8091 (or GET /hooks/<name> from a test).
+services:
+  webhook-sink:
+    build:
+      context: .
+      dockerfile: ../Dockerfile
+    profiles: [fakes]
+    ports:
+      - "127.0.0.1:${WEBHOOK_SINK_PORT:-8091}:8091"
+    init: true
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8091/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    mem_limit: 128m
+    restart: unless-stopped

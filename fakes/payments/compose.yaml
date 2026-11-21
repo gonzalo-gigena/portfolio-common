@@ -1,0 +1,25 @@
+# Include from a project:
+#   include:
+#     - path: common/fakes/payments/compose.yaml
+#       env_file: .env
+# Runs only when the `fakes` profile is on (COMPOSE_PROFILES=fakes in .env), so production never starts it.
+services:
+  payments-mock:
+    build:
+      context: .
+      dockerfile: ../Dockerfile
+    profiles: [fakes]
+    environment:
+      PUBLIC_URL: http://localhost:${PAYMENTS_MOCK_PORT:-8090}
+      WEBHOOK_SECRET: ${PAYMENTS_WEBHOOK_SECRET:-whsec_local_dev}
+      WEBHOOK_URL: ${PAYMENTS_WEBHOOK_URL:-}
+    ports:
+      - "127.0.0.1:${PAYMENTS_MOCK_PORT:-8090}:8090" # the buyer's browser opens the checkout page
+    init: true
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8090/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    mem_limit: 128m
+    restart: unless-stopped

@@ -1,0 +1,21 @@
+# docker compose -f test/compose.yaml run --rm --build test
+include:
+  - ../fakes/payments/compose.yaml
+  - ../fakes/webhook-sink/compose.yaml
+
+services:
+  test:
+    image: node:26.13-bookworm-slim
+    volumes:
+      - ./:/test:ro
+    working_dir: /test
+    command: ["node", "--test"]
+    environment:
+      PAYMENTS_URL: http://payments-mock:8090
+      SINK_URL: http://webhook-sink:8091
+      WEBHOOK_SECRET: whsec_local_dev
+    depends_on:
+      payments-mock:
+        condition: service_healthy
+      webhook-sink:
+        condition: service_healthy
