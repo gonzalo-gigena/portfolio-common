@@ -23,7 +23,7 @@ stays in its project.
 Clone projects with their submodule:
 
 ```bash
-git clone --recurse-submodules https://github.com/<you>/ticket-booking.git
+git clone --recurse-submodules https://github.com/gonzalo-gigena/ticket-booking.git
 ```
 
 Already cloned without it? Run `git submodule update --init`. To make every future
