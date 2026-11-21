@@ -1,0 +1,20 @@
+# Failure drills. Starts only with the `chaos` profile: COMPOSE_PROFILES=fakes,chaos.
+# A project sends a dependency through toxiproxy by pointing its host at it, e.g.
+#   DATABASE_URL: postgres://…@${DB_HOST:-db}:5432/…   and in .env: DB_HOST=toxiproxy
+# Then `sh common/scripts/chaos.sh …` injects faults. API: http://localhost:8474
+services:
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.13.0
+    profiles: [chaos]
+    command: ["-host=0.0.0.0", "-config=/proxies.json"]
+    volumes:
+      - ./proxies.json:/proxies.json:ro
+    ports:
+      - "127.0.0.1:${TOXIPROXY_PORT:-8474}:8474"
+    healthcheck:
+      test: ["CMD", "/toxiproxy-cli", "list"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    mem_limit: 64m
+    restart: unless-stopped

@@ -1,0 +1,26 @@
+# Point-in-time recovery for a project's Postgres (B3). In the project's compose.yaml:
+#
+#   db:
+#     extends: { file: common/backup/compose.yaml, service: db-pitr }
+#     environment: …        # the project's own settings stay as they are
+#   volumes:
+#     pgbackrest:
+#
+# Back up with `sh common/scripts/backup.sh`, drill with `sh common/scripts/restore-drill.sh`.
+services:
+  db-pitr:
+    build:
+      context: .
+    command:
+      - postgres
+      - -c
+      - wal_level=replica
+      - -c
+      - archive_mode=on
+      - -c
+      - archive_command=pgbackrest archive-push %p
+      # Bounds data loss when the server dies: a WAL segment is archived at least every 60 s.
+      - -c
+      - archive_timeout=60
+    volumes:
+      - pgbackrest:/var/lib/pgbackrest

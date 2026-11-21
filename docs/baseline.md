@@ -169,6 +169,41 @@ README.md
     - **Scaling**: what you measured (k6 numbers, replicas vs throughput) and
       where it breaks next.
 
+11. **Schema changes with zero downtime (expand/contract)**
+    During a rolling deploy, old and new code run against the same schema at the
+    same time. A migration must work with both. Renaming `users.name` to
+    `users.full_name` takes six deploys, never one:
+
+    | # | Migration / code change | Old code still works because… |
+    |---|---|---|
+    | 1 | **Expand:** `ADD COLUMN full_name text` (nullable, no default) | it ignores the new column |
+    | 2 | Code writes **both** columns, still reads `name` | — |
+    | 3 | **Backfill** in batches: `UPDATE … WHERE id BETWEEN $1 AND $2 AND full_name IS NULL`, a few thousand rows per transaction, a short sleep between | short transactions, short row locks |
+    | 4 | Code **reads** `full_name` (falls back to `name` if null), still writes both | — |
+    | 5 | Code stops writing `name` | step 4 code no longer reads it |
+    | 6 | **Contract:** `DROP COLUMN name` | nothing running references it |
+
+    Lock safety, in every migration:
+    - Start with `SET lock_timeout = '3s';`. Most `ALTER TABLE`s take an
+      `ACCESS EXCLUSIVE` lock. Waiting behind a long query, it blocks every query
+      queued after it. Better to fail fast and retry the deploy.
+    - `CREATE INDEX CONCURRENTLY` (and `DROP INDEX CONCURRENTLY`) can't run in a
+      transaction. golang-migrate sends a file as one multi-statement query, which
+      Postgres runs as one implicit transaction, so the statement goes **alone in its
+      own file**. Use `IF NOT EXISTS`: a failed concurrent build leaves an `INVALID`
+      index to drop before retrying.
+    - `NOT NULL` on a big table: `ADD CONSTRAINT … CHECK (col IS NOT NULL) NOT VALID`
+      (instant), then in a later migration `VALIDATE CONSTRAINT` (scans without
+      blocking writes). On 12+, `SET NOT NULL` then sees the valid check and skips its scan.
+    - Same trick for foreign keys: `ADD CONSTRAINT … FOREIGN KEY … NOT VALID`, then
+      `VALIDATE CONSTRAINT`.
+    - Adding a column with a constant default is instant (11+). A volatile default
+      (`now()`, `gen_random_uuid()`) rewrites the table; add it nullable and backfill.
+
+    `common/scripts/check-migrations.sh` checks the first two rules in CI.
+    `common/scripts/migrate-under-load.sh` applies pending migrations and rolls the
+    api replicas onto new code while k6 runs. It fails if a single request fails.
+
 ## Done when
 
 - A fresh clone on a machine that has never seen the project is running in

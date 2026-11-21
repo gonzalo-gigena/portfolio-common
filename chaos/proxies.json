@@ -1,0 +1,5 @@
+[
+  { "name": "db",    "listen": "0.0.0.0:5432", "upstream": "db:5432",    "enabled": true },
+  { "name": "redis", "listen": "0.0.0.0:6379", "upstream": "redis:6379", "enabled": true },
+  { "name": "nats",  "listen": "0.0.0.0:4222", "upstream": "nats:4222",  "enabled": true }
+]
