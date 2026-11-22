@@ -18,13 +18,14 @@ user=$(envof POSTGRES_USER)
 dbname=$(envof POSTGRES_DB)
 uid=$(docker run --rm --entrypoint id "$image" -u postgres)
 name=restore-drill-$$
-trap 'docker rm -f "$name" >/dev/null 2>&1' EXIT
+trap 'docker rm -fv "$name" >/dev/null 2>&1' EXIT
 
 set -- # the target goes to pgbackrest as separate args, so a timestamp with spaces stays one arg
 [ -n "$target" ] && set -- --type=time "--target=$target" --target-action=promote
 
 start=$(date +%s)
-# tmpfs for PGDATA: a drill copy needs no volume and vanishes with the container.
+# tmpfs for PGDATA. Images that declare a VOLUME below it (pg17 and older) still get an
+# anonymous volume, hence `rm -v` in the trap. It never removes named volumes like the repo.
 docker run -d --name "$name" -u postgres --tmpfs "/var/lib/postgresql:uid=$uid,gid=$uid" \
   -v "$repo:/var/lib/pgbackrest:ro" -e PGBACKREST_LOCK_PATH=/tmp/pgbackrest \
   --entrypoint sh "$image" -c '

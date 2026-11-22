@@ -134,7 +134,7 @@ Proof under load: `sh common/scripts/migrate-under-load.sh` (0 failed requests o
 ## Backups and restore drill
 
 The project's `db` extends `db-pitr` (see the header of `backup/compose.yaml`). Postgres
-archives WAL to a `pgbackrest` volume at least every 60 s. `sh common/scripts/backup.sh`
+archives WAL to a `pgbackrest` volume at least every 60 s while archiving is healthy. `sh common/scripts/backup.sh`
 takes a full backup. `sh common/scripts/restore-drill.sh [timestamp]` restores into a
 throwaway container (read-only repo, never archives), runs `CHECK_SQL` and prints the RTO.
 `test/pitr.sh` runs the whole thing weekly in CI and prints the measured RPO.
@@ -157,4 +157,4 @@ retries, resends, subscriptions, input validation and HTML escaping. CI runs it 
 sh test/pitr.sh
 ```
 
-Backup → write → point-in-time restore → exact row check, then an RPO measurement. CI runs it on every push and weekly.
+Backup → write → point-in-time restore → exact row check, then an RPO measurement. CI runs it on PRs, pushes to main and weekly.
