@@ -16,6 +16,10 @@ stays in its project.
 | `scripts/smoke.sh` | Fails unless traffic reaches N distinct replicas | all (CI) |
 | `scripts/ci-stack.sh` | Start the stack with N replicas, smoke test it, tear it down | all (CI) |
 | `scripts/scale.sh` | k6 load test at 1, 2, 4… replicas | all |
+| `chaos/` + `scripts/chaos.sh` | Toxiproxy under the `chaos` profile: latency, blackhole, cut, replica partition, and timed drills under k6 | all |
+| `scripts/check-migrations.sh` | Lints migrations for `lock_timeout` and lone `CONCURRENTLY` | all (CI) |
+| `scripts/migrate-under-load.sh` | Migrate + rolling replica replace under k6; fails on any failed request | all |
+| `backup/` + `scripts/backup.sh`, `scripts/restore-drill.sh` | Postgres with pgBackRest WAL archiving, point-in-time restore drill with RTO | all |
 | `docs/` | The shared baseline plan and the plan audit | — |
 
 ## Using it from a project
@@ -104,6 +108,42 @@ arrived (for tests), `DELETE` clears it, and http://localhost:8091 shows it all 
 
 Send to `smtp://mailpit:1025` (any username and password work). Read the mail at http://localhost:8025.
 
+## Failure drills (chaos)
+
+Add `common/chaos/compose.yaml` to `include:`, write dependency hosts as
+`${DB_HOST:-db}` (and `REDIS_HOST`, `NATS_HOST`), then in `.env`:
+`COMPOSE_PROFILES=fakes,chaos` and `DB_HOST=toxiproxy`. Proxies `db`, `redis` and `nats`
+listen on their usual ports. A project with other dependencies mounts its own `proxies.json`.
+
+```bash
+sh common/scripts/chaos.sh drill down db       # cut Postgres for 20 s while k6 runs
+sh common/scripts/chaos.sh drill latency redis 300
+sh common/scripts/chaos.sh drill partition api 1
+```
+
+The drill prints k6's error rate and how long the app took to answer again after healing.
+Those numbers fill the project's "When X fails" table. Its first run found that a
+`pg.Pool` without an `error` handler crashes the process when the database drops.
+
+## Zero-downtime migrations
+
+Rules: `docs/baseline.md`, step 11. In project CI: `sh common/scripts/check-migrations.sh`.
+Proof under load: `sh common/scripts/migrate-under-load.sh` (0 failed requests out of
+414k at ~10k req/s on a laptop, 2 replicas replaced).
+
+## Backups and restore drill
+
+The project's `db` extends `db-pitr` (see the header of `backup/compose.yaml`). Postgres
+archives WAL to a `pgbackrest` volume at least every 60 s while archiving is healthy. `sh common/scripts/backup.sh`
+takes a full backup. `sh common/scripts/restore-drill.sh [timestamp]` restores into a
+throwaway container (read-only repo, never archives), runs `CHECK_SQL` and prints the RTO.
+`test/pitr.sh` runs the whole thing weekly in CI and prints the measured RPO.
+
+<!-- ponytail: the repo is a local volume. Off-machine copies need repo1-type=s3 + bucket env vars; MinIO no longer publishes images, so pick the S3 you deploy to. -->
+**The repo is a Docker volume on the same machine**, so this protects against bad
+deploys and deleted rows, not a lost disk. For production, point pgBackRest at S3
+(`PGBACKREST_REPO1_TYPE=s3` plus bucket, endpoint and keys).
+
 ## Tests
 
 ```bash
@@ -112,3 +152,9 @@ docker compose -f test/compose.yaml --profile fakes run --rm --build test
 
 This runs the payments flow end to end into webhook-sink: idempotency, signatures,
 retries, resends, subscriptions, input validation and HTML escaping. CI runs it on every push.
+
+```bash
+sh test/pitr.sh
+```
+
+Backup → write → point-in-time restore → exact row check, then an RPO measurement. CI runs it on PRs, pushes to main and weekly.
